@@ -2,44 +2,53 @@
 import edu.princeton.cs.algs4.In;
 import edu.princeton.cs.algs4.Stack;
 import edu.princeton.cs.algs4.StdOut;
-
-import java.util.Arrays;
-import java.util.Random;
+import edu.princeton.cs.algs4.StdRandom;
 
 
 public class Board {
-    int dimension; // the dimension of the board
-    int[][] board;
-    int hamming;
-    int manhattan;
-    int[] zeroTilePosition = new int[]{-1, -1}; // we set this impossible value
+    private final int dimension; // the dimension of the board
+    private final int[][] copy;
+    private int manhattan = -1;
+    private int hamming = -1;
+    private byte blankTile_i_index;
+    private byte blankTile_j_index;
+    private byte swapTwinTile1;
+    private byte swapTwinTile2;
+
 
     // create a board from an n-by-n array of tiles,
     // where tiles[row][col] = tile at (row, col)
     public Board(int[][] tiles) {
-        dimension = tiles.length;  // size of the n-by-n array of tiles
-        assert 2 <= dimension;
-        assert dimension < 128;
-
         // we have to do a double nested loop to copy the entries in a two-dimensional array as Arrays,copyOf or
         // clone only deep-copy one dimensional array
-        int[][] copy = doubleArrayCopy(tiles);
-        board = copy;
-
-        hamming = hamming(); // we set an impossible value to enable checks in manhattan() and  hamming() and so avoid call repeats
-        manhattan = manhattan();
+        int length = tiles.length;
+        assert 2 <= length;
+        assert length < 128;
+        this.dimension = length;
+        this.copy = copy(tiles);
+        this.hamming = hamming();
+        this.manhattan = manhattan();
     }
 
-    private int[][] doubleArrayCopy(int[][] tiles) {
+    private int[][] copy(int[][] tiles) {
+        boolean foundBlankTile = false;
+        int[][] tilesCopy = new int[dimension][dimension];
         // defensive copy of input to ensure immutability
-        int[][] copy = new int[dimension][dimension];
-
-        for (int i = 0; i < dimension; i++) {
-            for (int j = 0; j < dimension; j++) {
-                copy[i][j] = tiles[i][j];
+        for (byte i = 0; i < dimension; i++) {
+            for (byte j = 0; j < dimension; j++) {
+                int tile = tiles[i][j];
+                // search for blank tile position as we touch on the array for the first time
+                if (!foundBlankTile) {
+                    if (tile == 0) {
+                        foundBlankTile = true;
+                        blankTile_i_index = i;
+                        blankTile_j_index = j;
+                    }
+                }
+                tilesCopy[i][j] = tile;
             }
         }
-        return copy;
+        return tilesCopy;
     }
 
     // string representation of this board
@@ -48,7 +57,7 @@ public class Board {
         s.append(dimension + "\n");
         for (int i = 0; i < dimension; i++) {
             for (int j = 0; j < dimension; j++) {
-                s.append(String.format("%2d ", board[i][j]));
+                s.append(String.format("%2d ", copy[i][j]));
             }
             s.append("\n");
         }
@@ -57,59 +66,61 @@ public class Board {
 
     // board dimension n * n
     public int dimension() {
-        return board.length;
+        return copy.length;
     }
 
     // number of tiles out of place
     public int hamming() {
-//        if (hamming > -1) return hamming; // call to hamming already completed no need to recall
-//        else {
-        int count = 0;
-        manhattan = 0; // now we will compute the value and need to count from 0 start
-        for (int i = 0; i < dimension; i++) {
-            for (int j = 0; j < dimension; j++) {
-                int tile = board[i][j]; // we ignore the blank square
-                int expected = getTile(i, j);
-                if (tile == 0) {
-                    zeroTilePosition = new int[]{i, j};
-                }
-                if (tile != expected && tile != 0) {
-                    int i_expected = get_index_i_forTile(tile);
-                    int j_expected = get_index_j_forTile(tile);
-                    manhattan += Math.abs(i - i_expected) + Math.abs(j - j_expected);
-                    count++;
+        if (hamming < 0) { // not already computed
+            int hammingValue = 0;
+            int  manhattanValue = 0;
+            for (int i = 0; i < dimension; i++) {
+                for (int j = 0; j < dimension; j++) {
+                    int tile = copy[i][j]; // we ignore the blank square
+                    int tileExpected = tile(i, j);
+                    if (0 != tile) { // blank is not a tile
+                        if (tile != tileExpected) { // tile is not at its normal place
+                            int i_expected = index_i_of(tile);
+                            int j_expected = index_j_of(tile);
+                            manhattanValue += Math.abs(i - i_expected) + Math.abs(j - j_expected);
+                            hammingValue++;
+                        }
+                    }
                 }
             }
-        } // if count has been incremented we update the hamming value
-        if (count != 0) hamming = count;
-            // all tiles are in place
-        else hamming = 0; // we set hamming here to skip potential call repeats
-        return hamming;
-    }
-    //  }
-
-    private int get_index_j_forTile(int tile) {
-        return tile - (get_index_i_forTile(tile) * dimension + 1);
-    }
-
-    private int get_index_i_forTile(int tile) {
-        return (tile - 1) / dimension;
-    }
-
-    private int getTile(int i, int j) {
-        return i * dimension + j + 1;
+            setManhattan(manhattanValue);
+            return hammingValue;
+        } else return hamming; // already computed
     }
 
     // sum of Manhattan distances between tiles and goal
     public int manhattan() {
-        if (manhattan == -1) hamming();  // hamming hasn't already been called so we call it
-        return manhattan;
+        if (manhattan < 0) {
+            return manhattan();
+        } else return manhattan;
     }
 
     // is this board the goal board?
     public boolean isGoal() {
-        return hamming == 0 ? true : false;
+        return hamming() == 0;
     }
+
+    private void setManhattan(int manhattan) {
+        this.manhattan = manhattan;
+    }
+
+    private int index_j_of(int tile) {
+        return tile - (index_i_of(tile) * dimension + 1);
+    }
+
+    private int index_i_of(int tile) {
+        return (tile - 1) / dimension;
+    }
+
+    private int tile(int i, int j) {
+        return i * dimension + j + 1;
+    }
+
 
     // does this board equal y?
     @Override
@@ -121,7 +132,6 @@ public class Board {
         Board that = (Board) y;
 
         // we make sure we compute hamming and manhattan of that object
-        that.manhattan();
 
         // test the values of each instance variables of the two boards
         if (this.dimension != that.dimension) return false;
@@ -129,116 +139,99 @@ public class Board {
         if (this.manhattan != that.manhattan) return false;
 
         // we assume the two boards are equals until found different
-        boolean areNotEquals = false;
+        int false_count = 0;
 
         // we compare the values of each tiles of the two puzzles one at a time and stop as soon as an inequality is found
         for (int i = 0; i < dimension; i++) {
             for (int j = 0; j < dimension; j++) {
-                if (this.board[i][j] != that.board[i][j]) areNotEquals = true;
-                break;
+                if (this.copy[i][j] != that.copy[i][j]) {
+                    false_count++;
+                }
             }
         }
-        return !areNotEquals;
+        return false_count == 0;
     }
 
     // all neighboring boards
     public Iterable<Board> neighbors() {
-
-        Board neighbour_board;
-        //empty stack
-        Stack<Board> neighbors = new Stack<>();
+        Board neighbour;
+        Stack<Board> neighbours = new Stack<>();
 
         // in hamming() we find the coordinates of the blank tile
-        if (Arrays.equals(zeroTilePosition, new int[]{-1, -1})) hamming();
-
-        int i = zeroTilePosition[0];
-        int j = zeroTilePosition[1];
-
+        int i = blankTile_i_index;
+        int j = blankTile_j_index;
+        int[][] tilesCopy;
 
         // we find the top neighbour
         if (i - 1 >= 0) {
-            // deep copy of board
-            int[][] copy_board = doubleArrayCopy(board);
+            // a fresh copy of boardTiles
+            tilesCopy = copy(this.copy);
             // we swap the tiles values
-            copy_board[i - 1][j] = board[i][j];
-            copy_board[i][j] = board[i - 1][j];
-            // and add if to the stack
-            neighbour_board = new Board(copy_board);
-            // and add it to the stack
-            neighbors.push(neighbour_board);
+            tilesCopy[i - 1][j] = this.copy[i][j];
+            tilesCopy[i][j] = this.copy[i - 1][j];
+            //create the neighbour
+            neighbour = new Board(tilesCopy);
+            //and add it to the stack
+            neighbours.push(neighbour);
         }
 
-        // we find the bottom neighbour
+        // bottom neighbour
         if (i + 1 < dimension) {
-            // deep copy of board
-            int[][] copy_board = doubleArrayCopy(board);
-            copy_board[i + 1][j] = board[i][j];
-            copy_board[i][j] = board[i + 1][j];
-            // and add if to the stack
-            neighbour_board = new Board(copy_board);
-            // and add it to the stack
-            neighbors.push(neighbour_board);
+            tilesCopy = copy(this.copy);
+            tilesCopy[i + 1][j] = this.copy[i][j];
+            tilesCopy[i][j] = this.copy[i + 1][j];
+            neighbour = new Board(tilesCopy);
+            neighbours.push(neighbour);
         }
 
-        // we find the right neighbour
+        // right neighbour
         if (j + 1 < dimension) {
-            // deep copy of board
-            int[][] copy_board = doubleArrayCopy(board);
+            tilesCopy = copy(this.copy);
             // we swap the tiles values
-            copy_board[i][j + 1] = board[i][j];
-            copy_board[i][j] = board[i][j + 1];
-            // and add if to the stack
-            neighbour_board = new Board(copy_board);
-            // and add it to the stack
-            neighbors.push(neighbour_board);
+            tilesCopy[i][j + 1] = this.copy[i][j];
+            tilesCopy[i][j] = this.copy[i][j + 1];
+            neighbour = new Board(tilesCopy);
+            neighbours.push(neighbour);
         }
 
-        // we find the left neighbour
+        // left neighbour
         if (j - 1 >= 0) {
-            // deep copy of board
-            int[][] copy_board = doubleArrayCopy(board);
-            // we swap the tiles values
-            copy_board[i][j - 1] = board[i][j];
-            copy_board[i][j] = board[i][j - 1];
-            // and add if to the stack
-            neighbour_board = new Board(copy_board);
-            // and add it to the stack
-            neighbors.push(neighbour_board);
+            tilesCopy = copy(this.copy);
+            tilesCopy[i][j - 1] = this.copy[i][j];
+            tilesCopy[i][j] = this.copy[i][j - 1];
+            neighbour = new Board(tilesCopy);
+            neighbours.push(neighbour);
         }
-        return neighbors;
+        return neighbours;
     }
-
 
     // a board that is obtained by exchanging any pair of tiles except the blank square that is not a tile
     public Board twin() {
-        Random random = new Random();
-        int tile1;
-        int tile2;
-        do {// blank tile is excluded with the +1 and so n is included
-            tile1 = random.nextInt(dimension * dimension);
-            tile2 = random.nextInt(dimension * dimension);
-        } while (tile1 == tile2 && tile1 != 0 && tile2 != 0); // the blank tiles is not to be swaped
+        if (swapTwinTile1 == 0 && swapTwinTile2 == 0) {
+            do {
+                // we pick two random non nul distinct integer
+                swapTwinTile1 = (byte) StdRandom.uniform(1, dimension * dimension);
+                swapTwinTile2 = (byte) StdRandom.uniform(1, dimension * dimension);
+            } while (swapTwinTile1 == swapTwinTile2);
+        }
 
-        return swapTiles(tile1, tile2);
-    }
-
-    private Board swapTiles(int tile1, int tile2) {
         // find location of tile1
-        int[] coordinates_tile1 = findCoordinates(tile1);
-        int[] coordinates_tile2 = findCoordinates(tile2);
+        int[] tile1Coordinates = findCoordinates(swapTwinTile1);
+        int[] tiles2Coordinates = findCoordinates(swapTwinTile2);
 
-        int i1 = coordinates_tile1[0];
-        int j1 = coordinates_tile1[1];
-        int i2 = coordinates_tile2[0];
-        int j2 = coordinates_tile2[1];
+        int i1 = tile1Coordinates[0];
+        int j1 = tile1Coordinates[1];
+        int i2 = tiles2Coordinates[0];
+        int j2 = tiles2Coordinates[1];
 
-        int[][] copy = doubleArrayCopy(board);
+        // we reference the copy of tiles
+        int[][] twin = copy(this.copy);
 
-        // now swap
-        copy[i1][j1] = tile2;
-        copy[i2][j2] = tile1;
+        // swap
+        twin[i1][j1] = swapTwinTile2;
+        twin[i2][j2] = swapTwinTile1;
 
-        return new Board(copy);
+        return new Board(twin);
     }
 
     private int[] findCoordinates(int tile) {
@@ -246,12 +239,11 @@ public class Board {
         int coordinate_j = -1;
         for (int i = 0; i < dimension; i++) {
             for (int j = 0; j < dimension; j++) {
-                if (board[i][j] == tile) {
+                if (copy[i][j] == tile) {
                     coordinate_i = i;
                     coordinate_j = j;
                     break;
                 }
-                ;
             }
         }
         // TODO try catch here for corner cases of NaN and others like not found -1??
@@ -259,35 +251,54 @@ public class Board {
     }
 
     // unit testing (not graded)
-    public static void main(String[] args) {
+//    public static void main(String[] args) {
+//
+//        for (String filename : args) {
+//            In in = new In(filename);
+//            int n = in.readInt();
+//            int[][] tiles = new int[n][n];
+//            for (int i = 0; i < n; i++) {
+//                for (int j = 0; j < n; j++) {
+//                    tiles[i][j] = in.readInt();
+//                }
+//            }
+//            Board b = new Board(tiles);
+//
+//            StdOut.println("The board: " + b.toString());
+//            StdOut.println("A twin 1st time : " + b.twin().toString());
+//            StdOut.println("twin equals twin : " + b.twin().equals(b.twin()));
+//
+//            b.neighbors();
+//
+//            StdOut.println("A twin 2nd time : " + b.twin().toString());
+//            b.neighbors();
+//
+//            StdOut.println("A twin 3rd time : " + b.twin().toString());
+//            b.neighbors();
+//
+//            StdOut.println("A twin 4th time : " + b.twin().toString());
+//            b.neighbors();
+//
+//
+//            StdOut.println("twin equals twin once : " + b.twin().equals(b.twin()));
+//            StdOut.println("twin equals twin twice : " + b.twin().equals(b.twin()));
+//            StdOut.println("twin equals twin three times : " + b.twin().equals(b.twin()));
+//
+//
+//            StdOut.println("A list of neighbours 4th time : " + b.neighbors().toString());
+//            StdOut.println("A list of neighbours 5th time : " + b.neighbors().toString());
+//
+//            int[][] tiles1 = {{8, 5, 4}, {7, 0, 6}, {3, 1, 2}};
+//            int[][] tiles2 = {{8, 5, 4}, {7, 0, 6}, {3, 2, 1}};
+//
+//            Board board1 = new Board(tiles1);
+//            Board board2 = new Board(tiles2);
+//
+//            StdOut.println(board1.equals(board2));
+//
+//
+//        }
+//    }
 
-        for (String filename : args) {
-            In in = new In(filename);
-            int n = in.readInt();
-            int[][] tiles = new int[n][n];
-            for (int i = 0; i < n; i++) {
-                for (int j = 0; j < n; j++) {
-                    tiles[i][j] = in.readInt();
-                }
-            }
-            Board b = new Board(tiles);
 
-            StdOut.println(b.toString());
-            StdOut.println("dimension: " + b.dimension());
-            StdOut.println("hamming count: " + b.hamming());
-            StdOut.println("manhattan value: " + b.manhattan());
-
-            StdOut.println("Boards neighbors are: ");
-            b.neighbors().forEach(board1 -> StdOut.println(board1.toString()));
-
-            // test for equality
-            Board b3x3 = new Board(new int[][]{{8, 1, 3}, {4, 0, 2}, {7, 6, 5}});
-            Board b49 = new Board(new int[][]{{2, 10, 15, 4}, {14, 11, 0, 6}, {9, 13, 8, 3}, {5, 7, 12, 1}});
-
-            StdOut.println("test equality of boards is: " + b.equals(b49));
-            StdOut.println("a twin of this board is : " + b.twin().toString());
-            StdOut.println("an other twin of this board is : " + b.twin().toString());
-
-        }
-    }
 }

@@ -1,42 +1,36 @@
-import edu.princeton.cs.algs4.In;
-import edu.princeton.cs.algs4.MinPQ;
-import edu.princeton.cs.algs4.Queue;
-import edu.princeton.cs.algs4.StdOut;
+
+
+import edu.princeton.cs.algs4.*;
+
+
+import java.util.Objects;
 
 
 public class Solver {
-    Board board;
-    Node node;
-    Node minNode;
+    private Node node;
+    private final Board initial;
+
 
     // find a solution to the initial board (using the A* algorithm)
     public Solver(Board initial) {
         if (null == initial) throw new IllegalArgumentException();
-        int n = initial.dimension();
+        this.initial = initial;
         node = new Node(initial);
-        MinPQ<Node> pq = new MinPQ();
-
-
-        // board = new Board(initial.board); // TODO to avoid mutation. Check how is this int[][] built from board ???
-        // solutionQueue = new Queue(); // redundant structure
-
+        MinPQ<Node> pq = new MinPQ<>();
         pq.insert(node); // insert initial node into PQ
-        node.moves = 0;
-        node.previous = null;
+
         while (!node.board.isGoal()) { // TODO OR not solvable board condition here to avoid infinite loop ??
-            minNode = pq.delMin(); // dequeue / pop the min node
+            Node minNode = pq.delMin(); // dequeue the min node
+
             for (Node neighbor : minNode.neighbors()) {
-                if (!neighbor.equals(minNode.previous)) { //TODO DO NOT insert previously inserted board. critical optimisation
-                    // use the heuristics property here of the priority function
-                    // that increases as we go up the graph
-                    //  if (minNode.priority > neighbor.priority) {
+                //  TODO avoid NULL Pointer Here CHECK EQUALITY IMPLEMENTATION ON BOARD!!!!
+                if (!neighbor.board.equals(minNode.board)) { // DO NOT insert previously inserted board. critical optimisation
+                    neighbor.previous = minNode; // we link the two nodes
+                    neighbor.moves = minNode.moves + 1; // we add one move to the minNode count
                     pq.insert(neighbor);
-                    neighbor.previous = minNode;// we link the two nodes
-                    //}
                 }
             }
             node = minNode; // we replace the current node with the dequeued node.
-            minNode.moves++; // we add one move to get to the minNode
         }
     }
 
@@ -48,43 +42,54 @@ public class Solver {
 
     // min number of moves to solve initial board
     public int moves() {
-        return minNode.moves;
+        return node.moves;
     }
 
     // sequence of boards in a shortest solution
     public Iterable<Board> solution() {
+        Stack<Board> reversedStack = new Stack<>();
+        Queue<Board> invertedSolutionQueue = new Queue<>();
         Queue<Board> solutionQueue = new Queue<>();
+
+        solutionQueue.enqueue(initial);
+
         while (null != node.previous) {
-            solutionQueue.enqueue(node.board);
+            invertedSolutionQueue.enqueue(node.board);
             node = node.previous;
         }
-        // TODO REVERSE OFDER
+        while (!invertedSolutionQueue.isEmpty()) {
+            reversedStack.push(invertedSolutionQueue.dequeue());
+        }
+
+        while (!reversedStack.isEmpty()) {
+            solutionQueue.enqueue(reversedStack.pop());
+        }
         return solutionQueue;
     }
 
     // the Node type that holds:
     private static class Node implements Comparable<Node> {
-        int priority;
-        int moves;
         Board board;
         Node previous;
+        int priority;
+        int moves;
 
-        public Node(Board board) {
+        Node(Board board) {
             this.board = board;
-            // TODO DEFINE MOVES HERE
-            this.moves = this.previous == null ? 0 : 1;
-            priority = this.priority();
-            previous = null;
+            // It takes 1 move from previous to get to this node so we add 1 to the previous moves
+            this.moves = 0; //previous == null ? 0 : previous.moves + 1;
+            this.priority = priorityFunction();
+            this.previous = null;
         }
 
-        public int priority() {
-            int hamming = this.board.hamming + moves;
-            int manhattan = this.board.manhattan + moves;
-            return manhattan; // We try the manhattan priority function
+        int priorityFunction() {
+            // int hamming = this.board.hamming + moves;
+            int res = this.board.manhattan() + moves;
+            return res; // We try the manhattan priority function
         }
 
         // all the neighboring nodes
-        public Queue<Node> neighbors() {
+        Queue<Node> neighbors() {
             Queue<Node> nodeNeighbors = new Queue<>();
             for (Board neighbor : this.board.neighbors()) {
                 Node nodeNeighbor = new Node(neighbor);
@@ -107,13 +112,20 @@ public class Solver {
         }
 
         @Override
-        public int compareTo(Node that) {
-            return this.priority() >= that.priority() ? 1 : 0;
+        public int hashCode() {
+            return Objects.hash(board, previous, priority, moves);
         }
-    }
+
+        @Override
+        public int compareTo(Node that) {
+            return this.priorityFunction() >= that.priorityFunction() ? 1 : 0;
+        }
+
+    } // END of Node class
 
 
     // test client (see below)
+//
     public static void main(String[] args) {
 
         // create initial board from file
@@ -125,6 +137,9 @@ public class Solver {
                 tiles[i][j] = in.readInt();
         Board initial = new Board(tiles);
 
+        StdOut.println("initial board :");
+        StdOut.println(initial);
+
         // solve the puzzle
         Solver solver = new Solver(initial);
 
@@ -132,9 +147,11 @@ public class Solver {
         if (!solver.isSolvable())
             StdOut.println("No solution possible");
         else {
-            StdOut.println("Minimum number of moves = " + solver.moves());
+            StdOut.println("Solution board has minimum number of moves = " + solver.moves());
             for (Board board : solver.solution())
                 StdOut.println(board);
+
         }
     }
+
 }
