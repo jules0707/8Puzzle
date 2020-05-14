@@ -69,44 +69,55 @@ public class Board {
         return copy.length;
     }
 
-    // number of tiles out of place
-    public int hamming() {
-        if (hamming < 0) { // not already computed
-            int hammingValue = 0;
-            int  manhattanValue = 0;
+    // sum of Manhattan distances between tiles and goal
+    public int manhattan() {
+        int manhattanValue;
+        // has manhattan already been computed?
+        if (manhattan >= 0) return manhattan;
+        else {
+            manhattanValue = 0;
             for (int i = 0; i < dimension; i++) {
                 for (int j = 0; j < dimension; j++) {
-                    int tile = copy[i][j]; // we ignore the blank square
-                    int tileExpected = tile(i, j);
-                    if (0 != tile) { // blank is not a tile
-                        if (tile != tileExpected) { // tile is not at its normal place
-                            int i_expected = index_i_of(tile);
-                            int j_expected = index_j_of(tile);
+                    int tileFound = copy[i][j];
+                    int tileExpected = tile(i, j); // the expected number at position (i,j)
+                    if (tileFound != 0) {  // we ignore the blank tile
+                        if (tileFound != tileExpected) {
+                            int i_expected = index_i_of(tileFound);
+                            int j_expected = index_j_of(tileFound);
                             manhattanValue += Math.abs(i - i_expected) + Math.abs(j - j_expected);
-                            hammingValue++;
                         }
                     }
                 }
             }
-            setManhattan(manhattanValue);
-            return hammingValue;
-        } else return hamming; // already computed
+        }
+        manhattan = manhattanValue;
+        return manhattan;
     }
 
-    // sum of Manhattan distances between tiles and goal
-    public int manhattan() {
-        if (manhattan < 0) {
-            return manhattan();
-        } else return manhattan;
+    // number of tiles out of place
+    public int hamming() {
+        int hammingValue;
+        if (hamming >= 0) return hamming;
+        else {
+            hammingValue = 0;
+            for (int i = 0; i < dimension; i++) {
+                for (int j = 0; j < dimension; j++) {
+                    int tileFound = copy[i][j];
+                    if (tileFound != 0) { // we ignore the blank tile
+                        if (tileFound != tile(i, j)) {
+                            hammingValue++;
+                        } // tileFound is not at its sequential place
+                    }
+                }
+            }
+            hamming = hammingValue; // we set the hamming value to avoid recomputation
+        }
+        return hamming;
     }
 
     // is this board the goal board?
     public boolean isGoal() {
-        return hamming() == 0;
-    }
-
-    private void setManhattan(int manhattan) {
-        this.manhattan = manhattan;
+        return hamming == 0;
     }
 
     private int index_j_of(int tile) {
@@ -157,15 +168,15 @@ public class Board {
         Board neighbour;
         Stack<Board> neighbours = new Stack<>();
 
-        // in hamming() we find the coordinates of the blank tile
+        // in copy() we find the coordinates of the blank tile
         int i = blankTile_i_index;
         int j = blankTile_j_index;
-        int[][] tilesCopy;
+        final int[][] hardCopy = this.copy;
 
         // we find the top neighbour
         if (i - 1 >= 0) {
             // a fresh copy of boardTiles
-            tilesCopy = copy(this.copy);
+            int[][] tilesCopy = copy(this.copy);
             // we swap the tiles values
             tilesCopy[i - 1][j] = this.copy[i][j];
             tilesCopy[i][j] = this.copy[i - 1][j];
@@ -177,7 +188,7 @@ public class Board {
 
         // bottom neighbour
         if (i + 1 < dimension) {
-            tilesCopy = copy(this.copy);
+            int[][] tilesCopy = copy(this.copy);
             tilesCopy[i + 1][j] = this.copy[i][j];
             tilesCopy[i][j] = this.copy[i + 1][j];
             neighbour = new Board(tilesCopy);
@@ -186,7 +197,7 @@ public class Board {
 
         // right neighbour
         if (j + 1 < dimension) {
-            tilesCopy = copy(this.copy);
+            int[][] tilesCopy = copy(this.copy);
             // we swap the tiles values
             tilesCopy[i][j + 1] = this.copy[i][j];
             tilesCopy[i][j] = this.copy[i][j + 1];
@@ -196,7 +207,7 @@ public class Board {
 
         // left neighbour
         if (j - 1 >= 0) {
-            tilesCopy = copy(this.copy);
+            int[][] tilesCopy = copy(this.copy);
             tilesCopy[i][j - 1] = this.copy[i][j];
             tilesCopy[i][j] = this.copy[i][j - 1];
             neighbour = new Board(tilesCopy);
@@ -251,20 +262,25 @@ public class Board {
     }
 
     // unit testing (not graded)
-//    public static void main(String[] args) {
-//
-//        for (String filename : args) {
-//            In in = new In(filename);
-//            int n = in.readInt();
-//            int[][] tiles = new int[n][n];
-//            for (int i = 0; i < n; i++) {
-//                for (int j = 0; j < n; j++) {
-//                    tiles[i][j] = in.readInt();
-//                }
-//            }
-//            Board b = new Board(tiles);
-//
-//            StdOut.println("The board: " + b.toString());
+/*    public static void main(String[] args) {
+
+        for (String filename : args) {
+            In in = new In(filename);
+            int n = in.readInt();
+            int[][] tiles = new int[n][n];
+            for (int i = 0; i < n; i++) {
+                for (int j = 0; j < n; j++) {
+                    tiles[i][j] = in.readInt();
+                }
+            }
+            Board b = new Board(tiles);
+
+            StdOut.println("The board: " + b.toString());
+            StdOut.println("manhattan of board: " + b.manhattan);
+            StdOut.println("hamming of board: " + b.hamming);
+
+*/
+
 //            StdOut.println("A twin 1st time : " + b.twin().toString());
 //            StdOut.println("twin equals twin : " + b.twin().equals(b.twin()));
 //
@@ -284,8 +300,7 @@ public class Board {
 //            StdOut.println("twin equals twin twice : " + b.twin().equals(b.twin()));
 //            StdOut.println("twin equals twin three times : " + b.twin().equals(b.twin()));
 //
-//
-//            StdOut.println("A list of neighbours 4th time : " + b.neighbors().toString());
+//            StdOut.println("list of neighbours : " + " \n " + b.neighbors().toString());
 //            StdOut.println("A list of neighbours 5th time : " + b.neighbors().toString());
 //
 //            int[][] tiles1 = {{8, 5, 4}, {7, 0, 6}, {3, 1, 2}};
@@ -297,8 +312,7 @@ public class Board {
 //            StdOut.println(board1.equals(board2));
 //
 //
-//        }
-//    }
-
+//}
+//}
 
 }
