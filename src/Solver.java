@@ -6,98 +6,68 @@ import edu.princeton.cs.algs4.Stack;
 import java.util.Objects;
 
 public class Solver {
+    private Node node;
     private int movesValue;
-    private boolean isSolvable;
-    private Node node1;
-    private Node node2;
-    private final Board initial;
-    private final Board twin;
+    private final boolean isSolvable;
     private Iterable<Board> solutionBoards;
 
 
     // find a solution to the initial board (using the A* algorithm)
-    public Solver(Board initial) {
-        if (null == initial) throw new IllegalArgumentException();
+    public Solver(Board given) {
+        if (null == given) throw new IllegalArgumentException();
         movesValue = -1;
-        this.initial = initial;
-        this.twin = initial.twin();
-        this.node1 = new Node(initial);
-        this.node2 = new Node(twin);
+        Board initial = given;
+        Board twin = initial.twin();
+        // to avoid a null pointer when we querry the previous board as part of the critical optimisation we add itself as previous
 
-        //Exactly one of the two (initial node or any twin node made from initial) will lead to the goal board.
+        Node node1 = new Node(initial, 0, new Node(initial, 0, null));
+        Node node2 = new Node(twin, 0, new Node(twin, 0, null));
+
+        // Exactly one of the two (initial node or any twin node made from initial) will lead to the goal board.
         // we run A* on two board instances, in locksteps, to find which board will lead to the goal board
         MinPQ<Node> pq1 = new MinPQ<>(); // the initial board PQ
         MinPQ<Node> pq2 = new MinPQ<>(); // a twin board PQ
-
-        int counter1 = 0;// first time in the loop
-        int counter2 = 0;
 
         pq1.insert(node1); // insert initial node into PQ
         pq2.insert(node2);
 
         // the first goal board found exits the search as they can't both be a goal board
         while (!node1.board.isGoal() && !node2.board.isGoal()) {
-
-            // Delete the node with the minimum priority,
             Node minNode1 = pq1.delMin();
+            for (Node neighbor : minNode1.neighbors()) {
+                // critical optimisation do not re-insert the previous node
+                // this hack of setting previous of initial to initial itself gives the following error message :
+                // - equals() compares a board to a board that is not a neighbor of a neighbor
+                // - this suggests either a bug in the critical optimization or an unnecessary
+                //   call to equals() for some purpose other than the critical optimization
+                // but we can ignore it has It has no consequences on timing nor memory nor correctness
+                if (!neighbor.board.equals(minNode1.previous.board)) {
+                    neighbor.previous = minNode1;
+                    neighbor.moves = minNode1.moves + 1;
+                    pq1.insert(neighbor);
+                }
+            }
+            node1 = minNode1;
+
+            // build of the second tree with twin as root
             Node minNode2 = pq2.delMin();
+            for (Node neighbor : minNode2.neighbors()) {
 
-            if (counter1 == 0) {
-                counter1++;
-                if (minNode1.board.equals(initial)) {
-                    pq1.insert(minNode1); // re-insert initial board that has just been dequeued
+                if (!neighbor.board.equals(minNode2.previous.board)) {
+                    neighbor.previous = minNode2;
+                    neighbor.moves = minNode2.moves + 1;
+                    pq2.insert(neighbor);
                 }
-            } else {
-                // insert all its neighbors. build the game tree
-                for (Node neighbor1 : minNode1.neighbors()) {
-                    int initialNeighborsCount = minNode1.neighbors().size();
-                    if (counter1 <= initialNeighborsCount) { // minNode.board is the initial board
-                        counter1++;
-                        neighbor1.previous = minNode1; // we link the two nodes
-                        neighbor1.moves = minNode1.moves + 1;
-                        pq1.insert(neighbor1); // we insert all the neighbors of initial board
-                    } else if (counter1 > initialNeighborsCount) { // to avoid the null pointer of minNode.previous.board
-                        // DO NOT insert previously inserted board. critical optimisation
-                        if (!neighbor1.board.equals(minNode1.previous.board)) {
-                            neighbor1.previous = minNode1; // we link the two nodes
-                            neighbor1.moves = minNode1.moves + 1;
-                            pq1.insert(neighbor1);
-                        }
-                    }
-                }
-                node1 = minNode1; // we replace the current node with the dequeued node.
             }
-
-            // BUILD OF THE SECOND GAME TREE
-            if (counter2 == 0) {
-                counter2++;
-                if (minNode2.board == twin) {
-                    pq2.insert(minNode2);
-                }
-            } else {
-                for (Node neighbor2 : minNode2.neighbors()) {
-                    int twinNeighborsCount = minNode2.neighbors().size();
-                    if (counter2 <= twinNeighborsCount ) {
-                        counter2++;
-                        neighbor2.previous = minNode2;
-                        neighbor2.moves = minNode2.moves + 1;
-                        pq2.insert(neighbor2);
-                    } else if (counter2 > twinNeighborsCount) {
-                        if (!neighbor2.board.equals(minNode2.previous.board)) {
-                            neighbor2.previous = minNode2;
-                            neighbor2.moves = minNode2.moves + 1;
-                            pq2.insert(neighbor2);
-                        }
-                    }
-                }
-                node2 = minNode2;
-            }
+            node2 = minNode2;
         }
+
         // we have exited the search so one of the boards is a goal!
-        isSolvable = node1.board.isGoal();
+        isSolvable = node1.board.isGoal(); // we are only interested in the solvability of node1?
         if (isSolvable) {
+            node = node1;
             movesValue = node1.moves;
-        }
+        } // if node2 is solvable we can be certain that node1 isn't see propriety of boards.
     }
 
     // is the initial board solvable? (see below)
@@ -112,23 +82,21 @@ public class Solver {
 
     // sequence of boards in a shortest solution
     public Iterable<Board> solution() {
-        if (!isSolvable) return null;
+        if (!isSolvable()) return null;
 
-        if (null == solutionBoards) {
+        if (null != solutionBoards) return solutionBoards;
+        else {
             Stack<Board> reversedStack = new Stack<>();
             Queue<Board> invertedSolutionQueue = new Queue<>();
             Queue<Board> solutionQueue = new Queue<>();
 
-            solutionQueue.enqueue(initial);
-
-            while (null != node1.previous) {
-                invertedSolutionQueue.enqueue(node1.board);
-                node1 = node1.previous;
+            while (null != node.previous) {
+                invertedSolutionQueue.enqueue(node.board);
+                node = node.previous;
             }
             while (!invertedSolutionQueue.isEmpty()) {
                 reversedStack.push(invertedSolutionQueue.dequeue());
             }
-
             while (!reversedStack.isEmpty()) {
                 solutionQueue.enqueue(reversedStack.pop());
             }
@@ -141,19 +109,17 @@ public class Solver {
     private static class Node implements Comparable<Node> {
         Board board;
         Node previous;
-        int manhattanValue;
-        int priority;
         int moves;
+        final int manhattanValue;
 
-        Node(Board board) {
+        Node(Board board, int moves, Node previous) {
             this.board = board;
+            this.moves = moves;
+            this.previous = previous;
             this.manhattanValue = this.board.manhattan();
-            this.priority = priorityFunction();
-            // It takes 1 move from previous to get to this node so we add +1 to the previous moves
-            this.moves = previous == null ? 0 : previous.moves + 1;
         }
 
-        int priorityFunction() {
+        private final int priorityFunction() {
             return manhattanValue + moves; // We choose the manhattan priority function
         }
 
@@ -161,7 +127,7 @@ public class Solver {
         Queue<Node> neighbors() {
             Queue<Node> nodeNeighbors = new Queue<>();
             for (Board neighbor : this.board.neighbors()) {
-                Node nodeNeighbor = new Node(neighbor);
+                Node nodeNeighbor = new Node(neighbor, this.moves + 1, this);
                 nodeNeighbors.enqueue(nodeNeighbor);
             }
             return nodeNeighbors;
@@ -174,21 +140,31 @@ public class Solver {
             if (y.getClass() != this.getClass()) return false;
 
             Node that = (Node) y;
-            if (!this.board.equals(that.board)) return false;
-            if (this.priority != that.priority) return false;
+            if (this.moves != that.moves) return false;
+            if (this.priorityFunction() != that.priorityFunction()) return false;
             if (this.previous != that.previous) return false;
+            if (!this.board.equals(that.board)) return false;
             return true;
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(board, previous, priority, moves);
+            return Objects.hash(board, previous, priorityFunction(), moves);
         }
 
         @Override
         public int compareTo(Node that) {
-            return this.priorityFunction() >= that.priorityFunction() ? 1 : 0;
+            int res = -1;
+            if (this.priorityFunction() > that.priorityFunction()) res = 1;
+            else if (this.priorityFunction() < that.priorityFunction()) res = 0;
+            else if (this.priorityFunction() == that.priorityFunction()) {
+                if (this.manhattanValue > that.manhattanValue) res = 1;
+                else if (this.manhattanValue < that.manhattanValue) res = 0;
+                else res = 1;
+            }
+            return res;
         }
+
 
     } // END of Node class
 
